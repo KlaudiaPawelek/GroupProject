@@ -110,6 +110,43 @@ void supervisedCircles(int event, int x, int y, int flags, Mat* img)
 }
 /*******************************************************************/
 
+void LensCleaning(int argc, const char **argv)
+{
+	if (argc > 30) //lens cleaning is performed only if there is sufficient number of images provided
+	{
+		Mat image = imread(argv[4], IMREAD_GRAYSCALE);
+
+		image.convertTo(image, CV_16UC1);
+		Mat sumImage = Mat(image.size(), CV_16UC1,Scalar(0));
+		for (int imageIterator = 5; imageIterator < argc; imageIterator++)
+		{
+			add(sumImage,image,sumImage);
+			image = imread(argv[imageIterator], IMREAD_GRAYSCALE);
+			image.convertTo(image, CV_16UC1);
+		}
+		Mat imageMean = Mat(image.size(), CV_16UC1,Scalar(0));
+		imageMean = sumImage / 100;
+		
+		int avgGrayLevel = 0;
+		avgGrayLevel=sum(imageMean)[0];
+		cout << avgGrayLevel << endl;
+		avgGrayLevel = avgGrayLevel / (image.rows*image.cols);
+		cout << "image loaded, parameters for lens cleaning calculated";
+		imageMean.convertTo(imageMean, CV_8UC1);
+		for (int i = 4; i < argc; i++)
+		{
+			Mat out = imread(argv[i], IMREAD_GRAYSCALE);
+			//out.convertTo(out, CV_16UC1);
+			imageMean.convertTo(imageMean, CV_8UC1); 
+			//subtract(out, imageMean, out);
+			absdiff(out, imageMean, out);
+			out = out + avgGrayLevel;
+			out.convertTo(out, CV_8UC1);
+			imshow("LensCleaning", out);
+			waitKey();				//WORKS PRETTY WELL BY FAR. NEED TO CHECK IF CONVERSION OF imageMEan to uchar type will be good too.
+		}
+	}
+}
 
 int main(int argc, const char **argv) {
 
@@ -125,7 +162,7 @@ int main(int argc, const char **argv) {
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
 
-
+	LensCleaning(argc, argv);
 
 										 // Loop through all images in the input folder, it starts from 4 because path to images is 5th argument on the command window
 	for (int k = 4; k < argc; k++) {
