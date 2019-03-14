@@ -1,5 +1,5 @@
 //THIS IS ONLY TEST FOR JENKINS
-//NOTHIG HAS BEEN CHANGED IN CODE
+//NOTHIG HAS BEEN CHANGED IN COD
 
 #include <opencv2/opencv.hpp>
 #include <vector>
