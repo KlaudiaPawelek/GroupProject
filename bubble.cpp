@@ -110,6 +110,7 @@ void supervisedCircles(int event, int x, int y, int flags, Mat* img)
 	}
 }
 /*******************************************************************/
+//Raise to power transform and logarithm transform.
 Mat r2pTransform(Mat input)
 {
 	Mat r2powImage, logImage;
@@ -121,62 +122,68 @@ Mat r2pTransform(Mat input)
 	normalize(r2powImage, r2powImage, 0, 255, NORM_MINMAX); //normalizing picture
 	convertScaleAbs(r2powImage, r2powImage); //converting back to uchar from float
 
-	r2powImage.convertTo(logImage, CV_32F);
-	logImage = logImage + 1;
-	log(logImage, logImage);
-	normalize(logImage, logImage, 0, 255, NORM_MINMAX);
-	convertScaleAbs(logImage, logImage);
-	return logImage;
+	//log transform
+	r2powImage.convertTo(logImage, CV_32F); //conversion of r2powImage from uchar to float
+	logImage = logImage + 1; //dont know what is this
+	log(logImage, logImage); //performing log transform
+	normalize(logImage, logImage, 0, 255, NORM_MINMAX); //normalizing picture
+	convertScaleAbs(logImage, logImage); //converting back to uchar
+	return logImage; //returning transformed image
 }
+
+//Lens Cleanign implemented based on Karols code
 vector<Mat> LensCleaning(int argc, const char **argv)
 {
-	vector<Mat> returnVMat(argc-4);
+	vector<Mat> returnVMat(argc-4); //creating vector of Mat which will store images after lens cleaning
 	if (argc > 30) //lens cleaning is performed only if there is sufficient number of images provided
 	{
 		auto begin = chrono::system_clock::now();
-		Mat image = imread(argv[4], IMREAD_GRAYSCALE);
-		Mat r2pImage = r2pTransform(image);
+		Mat image = imread(argv[4], IMREAD_GRAYSCALE); //reading first image
+		Mat r2pImage = r2pTransform(image); //performing r2pow and log transform
 		image = r2pImage.clone();
-		image.convertTo(image, CV_16UC1);
-		Mat sumImage = Mat(image.size(), CV_16UC1,Scalar(0));
+		image.convertTo(image, CV_16UC1); //conversion to 16bit image
+		Mat sumImage = Mat(image.size(), CV_16UC1,Scalar(0)); //alocating Mat object which will store sum of pixels
+		//looping through rest of images to add all images to one
 		for (int imageIterator = 5; imageIterator < argc; imageIterator++)
 		{
-			add(sumImage,image,sumImage);
-			image = imread(argv[imageIterator], IMREAD_GRAYSCALE);
-			image.convertTo(image, CV_16UC1);
+			add(sumImage,image,sumImage); //adding images
+			image = imread(argv[imageIterator], IMREAD_GRAYSCALE); //reading next image
+			image.convertTo(image, CV_16UC1); //convertion to 16bit image
 		}
-		Mat imageMean = Mat(image.size(), CV_16UC1,Scalar(0));
-		imageMean = sumImage / (argc-4);
-		
-		int avgGrayLevel = 0;
-		avgGrayLevel=sum(imageMean)[0];
+
+		Mat imageMean = Mat(image.size(), CV_16UC1,Scalar(0)); //alocating Mat object which will store average pixel value
+		imageMean = sumImage / (argc-4); //divding sum image by number of all images-> calculating mean of each pixel
+		imageMean.convertTo(imageMean, CV_8UC1); //convertion back to 8bit image
+
+		int avgGrayLevel = 0; //average gray level value required to maitain the same gray level after noise removal
+		avgGrayLevel=sum(imageMean)[0]; //summing all pixels to one value
 		//cout << avgGrayLevel << endl;
-		avgGrayLevel = avgGrayLevel / (image.rows*image.cols);
+		avgGrayLevel = avgGrayLevel / (image.rows*image.cols); //dividing sumed pixels values by number of pixels
 		//cout << "image loaded, parameters for lens cleaning calculated";
-		imageMean.convertTo(imageMean, CV_8UC1);
+		
 		auto end = chrono::system_clock::now();
 		chrono::duration<double> elapsed_seconds = end - begin;
 		//cout << "Time :" << elapsed_seconds.count() << endl; //about 2 seconds
 		for (int i = 4; i < argc; i++)
 		{
 			begin = chrono::system_clock::now();
-			Mat out = imread(argv[i], IMREAD_GRAYSCALE);
+			Mat out = imread(argv[i], IMREAD_GRAYSCALE); //reading first image
 			//out.convertTo(out, CV_16UC1);
 			imageMean.convertTo(imageMean, CV_8UC1); 
 			//subtract(out, imageMean, out);
-			absdiff(out, imageMean, out);
+			absdiff(out, imageMean, out); //performing lens cleaning based on equation from Karols paper/code
 			out = out + avgGrayLevel;
 			out.convertTo(out, CV_8UC1);
 			end = chrono::system_clock::now();
 			elapsed_seconds = end - begin;
-			bitwise_not(out, out);
-			returnVMat[i - 4] = out;
+			bitwise_not(out, out); //
+			returnVMat[i - 4] = out; //assigning cleaned image to return vector
 			//cout << "Time :" << elapsed_seconds.count() << endl; //about 0.03 second
 			//imshow("LensCleaning", out);
 			//waitKey();
 		}
 	}
-	return returnVMat;
+	return returnVMat; //returning images in vector
 }
 
 int main(int argc, const char **argv) {
@@ -210,8 +217,11 @@ int main(int argc, const char **argv) {
 
 		img = imread(argv[k], 0);    // loading the image in grayscale (classifier was trained on greyscale images)
 		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
+
 		Mat imgr2p = r2pTransform(img);
+		if(!imgLC.empty())
 		Mat imgLCr2p = r2pTransform(imgLC);
+
 		if (img.empty())
 		{
 			cout << "Failed to open image " << argv[k] << endl;
@@ -239,7 +249,10 @@ int main(int argc, const char **argv) {
 			// Function to detect droplets using Cascade Classifier; detected droplets are returned as a list of rectangles
 			// vector "drops" stores information about rectangles coordinates
 			cascade.detectMultiScale(img, drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
+
+			if(!imgLC.empty())
 			cascade.detectMultiScale(imgLC, dropsLC, 1.05, 3, 0, Size(5, 5), Size(570, 570));
+
 			temp = k - 3;// number of image
 
 						 // converting variable "temp" into string type
@@ -287,8 +300,8 @@ int main(int argc, const char **argv) {
 				int diameter = 2 * radius;
 				Point tl = r.tl(); //top left corner Point
 				Point br = r.br(); //bottom right corner Point
-				int xIncrease = cvRound(drops[i].width*0.2);
-				int yIncrease = cvRound(drops[i].height*0.2);
+				int xIncrease = cvRound(drops[i].width*0.3);
+				int yIncrease = cvRound(drops[i].height*0.3);
 				if (tl.x - xIncrease > 0)
 					tl.x -= xIncrease;
 				else 
@@ -310,7 +323,7 @@ int main(int argc, const char **argv) {
 				Mat circlePart = imgr2p(Range(tl.y,br.y), Range(tl.x, br.x));
 				vector<Vec3f> circlesDetected;
 
-				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 200, 80, radius*0.7, radius*1.3);
+				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 180, 80, radius*0.7, radius*1.3);
 
 				int cIt = 0;
 				double newRadius = 0;
@@ -327,7 +340,6 @@ int main(int argc, const char **argv) {
 
 				if (circlesDetected.size())
 				{
-					//circle(circlePart, Point(circlesDetected[maxRadiusIndx][0], circlesDetected[maxRadiusIndx][1]), circlesDetected[maxRadiusIndx][2], Scalar(255), 2);
 					newCenter.x /= circlesDetected.size();
 					newCenter.y /= circlesDetected.size();
 					newRadiusAvg /= circlesDetected.size();
@@ -354,30 +366,10 @@ int main(int argc, const char **argv) {
 				}
 
 			}
-			//for (int i = 0; i < dropsLC.size(); i++) {
-			//	Rect r = dropsLC[i];
-			//	// calculating the center of droplet
-			//	Point center(dropsLC[i].x + dropsLC[i].width*0.5, dropsLC[i].y + dropsLC[i].height*0.5 + 3);
-			//	// calculating radius of droplets
-			//	int radius = abs(dropsLC[i].width*0.5);
-			//	int diameter = 2 * radius;
-			//
-			//	// Adding calculated informations into vectors
-			//	//centers.push_back(center);
-			//	//radiuses.push_back(radius);
-			//
-			//	// Drawing detected droplets
-			//	circle(img1LC, center, radius, Scalar(255, 0, 0), 1);
-			//
-			//}
-
-			//namedWindow(windowName, WINDOW_AUTOSIZE);
-			//setMouseCallback("Supervising", (CvMouseCallback)supervisedCircles, &img1);
-
 
 			while (keepProcessing) {
 				imshow(windowName, img1);
-				imshow("With Lense Cleaning", img1LC);
+				//imshow("With Lense Cleaning", img1LC);
 				//key = waitKey(20);
 
 				key = 'n';
