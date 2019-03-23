@@ -8,7 +8,7 @@
 #include <sstream>
 
 #include <stdlib.h>
-
+#include <chrono>
 
 using namespace cv;
 using namespace std;
@@ -18,6 +18,7 @@ vector <Point> points_to_remove;               // vector of points;  these point
 vector <Point> centers;                        // centers of detected bubbles
 vector <int> radiuses;                        // radises of detected bubbles
 vector<Rect> drops;                            // droplets detected by classifier
+vector<Rect> dropsLC;
 vector <double> diameters_in_mikrometers;      // diameters in mikrometers unit
 double calibration_factor;
 string name_of_classifier;
@@ -109,13 +110,33 @@ void supervisedCircles(int event, int x, int y, int flags, Mat* img)
 	}
 }
 /*******************************************************************/
-
-void LensCleaning(int argc, const char **argv)
+Mat r2pTransform(Mat input)
 {
+	Mat r2powImage, logImage;
+
+	//raise to power transform
+	input.convertTo(r2powImage, CV_32F); //changing pixel value type (from uchar to float)
+	r2powImage = r2powImage + 1; // dont know what is this :v
+	pow(r2powImage, 5, r2powImage);
+	normalize(r2powImage, r2powImage, 0, 255, NORM_MINMAX); //normalizing picture
+	convertScaleAbs(r2powImage, r2powImage); //converting back to uchar from float
+
+	r2powImage.convertTo(logImage, CV_32F);
+	logImage = logImage + 1;
+	log(logImage, logImage);
+	normalize(logImage, logImage, 0, 255, NORM_MINMAX);
+	convertScaleAbs(logImage, logImage);
+	return logImage;
+}
+vector<Mat> LensCleaning(int argc, const char **argv)
+{
+	vector<Mat> returnVMat(argc-4);
 	if (argc > 30) //lens cleaning is performed only if there is sufficient number of images provided
 	{
+		auto begin = chrono::system_clock::now();
 		Mat image = imread(argv[4], IMREAD_GRAYSCALE);
-
+		Mat r2pImage = r2pTransform(image);
+		image = r2pImage.clone();
 		image.convertTo(image, CV_16UC1);
 		Mat sumImage = Mat(image.size(), CV_16UC1,Scalar(0));
 		for (int imageIterator = 5; imageIterator < argc; imageIterator++)
@@ -125,16 +146,20 @@ void LensCleaning(int argc, const char **argv)
 			image.convertTo(image, CV_16UC1);
 		}
 		Mat imageMean = Mat(image.size(), CV_16UC1,Scalar(0));
-		imageMean = sumImage / 100;
+		imageMean = sumImage / (argc-4);
 		
 		int avgGrayLevel = 0;
 		avgGrayLevel=sum(imageMean)[0];
-		cout << avgGrayLevel << endl;
+		//cout << avgGrayLevel << endl;
 		avgGrayLevel = avgGrayLevel / (image.rows*image.cols);
-		cout << "image loaded, parameters for lens cleaning calculated";
+		//cout << "image loaded, parameters for lens cleaning calculated";
 		imageMean.convertTo(imageMean, CV_8UC1);
+		auto end = chrono::system_clock::now();
+		chrono::duration<double> elapsed_seconds = end - begin;
+		//cout << "Time :" << elapsed_seconds.count() << endl; //about 2 seconds
 		for (int i = 4; i < argc; i++)
 		{
+			begin = chrono::system_clock::now();
 			Mat out = imread(argv[i], IMREAD_GRAYSCALE);
 			//out.convertTo(out, CV_16UC1);
 			imageMean.convertTo(imageMean, CV_8UC1); 
@@ -142,10 +167,16 @@ void LensCleaning(int argc, const char **argv)
 			absdiff(out, imageMean, out);
 			out = out + avgGrayLevel;
 			out.convertTo(out, CV_8UC1);
-			imshow("LensCleaning", out);
-			waitKey();				//WORKS PRETTY WELL BY FAR. NEED TO CHECK IF CONVERSION OF imageMEan to uchar type will be good too.
+			end = chrono::system_clock::now();
+			elapsed_seconds = end - begin;
+			bitwise_not(out, out);
+			returnVMat[i - 4] = out;
+			//cout << "Time :" << elapsed_seconds.count() << endl; //about 0.03 second
+			//imshow("LensCleaning", out);
+			//waitKey();
 		}
 	}
+	return returnVMat;
 }
 
 int main(int argc, const char **argv) {
@@ -161,8 +192,8 @@ int main(int argc, const char **argv) {
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
-
-	LensCleaning(argc, argv);
+	vector<Mat> imagesAfterLC(argc - 4);
+	imagesAfterLC= LensCleaning(argc, argv);
 
 										 // Loop through all images in the input folder, it starts from 4 because path to images is 5th argument on the command window
 	for (int k = 4; k < argc; k++) {
@@ -174,9 +205,13 @@ int main(int argc, const char **argv) {
 		name_of_file1 = path + "\\diametersInMikroMeters.txt"; // creating file with diameters in mikrometers
 		keepProcessing = true;
 
+		Mat imgLC = imagesAfterLC[k - 4];
+		Mat img1LC = imagesAfterLC[k - 4];
+
 		img = imread(argv[k], 0);    // loading the image in grayscale (classifier was trained on greyscale images)
 		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
-	
+		Mat imgr2p = r2pTransform(img);
+		Mat imgLCr2p = r2pTransform(imgLC);
 		if (img.empty())
 		{
 			cout << "Failed to open image " << argv[k] << endl;
@@ -204,7 +239,7 @@ int main(int argc, const char **argv) {
 			// Function to detect droplets using Cascade Classifier; detected droplets are returned as a list of rectangles
 			// vector "drops" stores information about rectangles coordinates
 			cascade.detectMultiScale(img, drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
-
+			cascade.detectMultiScale(imgLC, dropsLC, 1.05, 3, 0, Size(5, 5), Size(570, 570));
 			temp = k - 3;// number of image
 
 						 // converting variable "temp" into string type
@@ -242,31 +277,107 @@ int main(int argc, const char **argv) {
 				cout << "Failed to open file " << name_of_file1 << endl;
 				return -1;
 			}
-
 			// iteration through all the vector with detected droplets
 			for (int i = 0; i < drops.size(); i++) {
 				Rect r = drops[i];
 				// calculating the center of droplet
 				Point center(drops[i].x + drops[i].width*0.5, drops[i].y + drops[i].height*0.5 + 3);
 				// calculating radius of droplets
-				int radius = abs(drops[i].width*0.5);
+				int radius = cvRound(abs(drops[i].width*0.5));
 				int diameter = 2 * radius;
+				Point tl = r.tl(); //top left corner Point
+				Point br = r.br(); //bottom right corner Point
+				int xIncrease = cvRound(drops[i].width*0.2);
+				int yIncrease = cvRound(drops[i].height*0.2);
+				if (tl.x - xIncrease > 0)
+					tl.x -= xIncrease;
+				else 
+					tl.x = 0;
+				if (tl.y - yIncrease > 0)
+					tl.y -= yIncrease;
+				else 
+					tl.y = 0;
+				if (br.x + xIncrease < img1.cols)
+					br.x += xIncrease;
+				else
+					br.x = img1.cols;
+				if (br.y + yIncrease < img1.rows)
+					br.y += yIncrease;
+				else 
+					br.y = img1.rows;
 
-				// Adding calculated informations into vectors
-				centers.push_back(center);
-				radiuses.push_back(radius);
+				Rect circleRectangle;
+				Mat circlePart = imgr2p(Range(tl.y,br.y), Range(tl.x, br.x));
+				vector<Vec3f> circlesDetected;
 
-				// Drawing detected droplets
-				circle(img1, center, radius, Scalar(255, 0, 0), 2);
+				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 200, 80, radius*0.7, radius*1.3);
+
+				int cIt = 0;
+				double newRadius = 0;
+				double newRadiusAvg = 0;
+				int maxRadiusIndx = 0;
+				Point newCenter=Point(0,0);
+				for (cIt; cIt < circlesDetected.size(); cIt++)
+				{
+					newCenter.x += circlesDetected[cIt][0];
+					newCenter.y += circlesDetected[cIt][1];
+					newRadiusAvg += circlesDetected[cIt][2];
+			
+				}
+
+				if (circlesDetected.size())
+				{
+					//circle(circlePart, Point(circlesDetected[maxRadiusIndx][0], circlesDetected[maxRadiusIndx][1]), circlesDetected[maxRadiusIndx][2], Scalar(255), 2);
+					newCenter.x /= circlesDetected.size();
+					newCenter.y /= circlesDetected.size();
+					newRadiusAvg /= circlesDetected.size();
+					for (int m = 0; m < dropsLC.size(); m++) {
+						Rect r = dropsLC[m];
+						// calculating the center of droplet
+						Point center(dropsLC[m].x + dropsLC[m].width*0.5, dropsLC[m].y + dropsLC[m].height*0.5 + 3);
+						if (center.x > 0.9*(newCenter.x + (tl.x)) && center.x < 1.1*(newCenter.x + (tl.x)) && center.y>0.9*(newCenter.y + (tl.y)) && center.y < 1.1*(newCenter.y + (tl.y)))
+						{
+							radius= cvRound(abs(dropsLC[m].width*0.5));
+							break;
+						}
+					}
+					circle(img1, Point(newCenter.x + (tl.x), newCenter.y + (tl.y)), radius, Scalar(0, 255, 0), 1); //drawing circle using center point of hough and radius of Haar
+					centers.push_back(Point(newCenter.x + (tl.x), newCenter.y + (tl.y)));
+					radiuses.push_back(radius);
+
+				}
+				else
+				{
+					centers.push_back(center);
+					radiuses.push_back(radius);
+					circle(img1, center, radius, Scalar(0, 255, 0), 1);
+				}
 
 			}
+			//for (int i = 0; i < dropsLC.size(); i++) {
+			//	Rect r = dropsLC[i];
+			//	// calculating the center of droplet
+			//	Point center(dropsLC[i].x + dropsLC[i].width*0.5, dropsLC[i].y + dropsLC[i].height*0.5 + 3);
+			//	// calculating radius of droplets
+			//	int radius = abs(dropsLC[i].width*0.5);
+			//	int diameter = 2 * radius;
+			//
+			//	// Adding calculated informations into vectors
+			//	//centers.push_back(center);
+			//	//radiuses.push_back(radius);
+			//
+			//	// Drawing detected droplets
+			//	circle(img1LC, center, radius, Scalar(255, 0, 0), 1);
+			//
+			//}
 
 			//namedWindow(windowName, WINDOW_AUTOSIZE);
 			//setMouseCallback("Supervising", (CvMouseCallback)supervisedCircles, &img1);
 
 
 			while (keepProcessing) {
-				//imshow(windowName, img1);
+				imshow(windowName, img1);
+				imshow("With Lense Cleaning", img1LC);
 				//key = waitKey(20);
 
 				key = 'n';
