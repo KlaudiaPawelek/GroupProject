@@ -195,6 +195,17 @@ int main(int argc, const char **argv) {
 	//cout << "n - Next image (automatically saving image and all your changes" << endl;
 	//cout << "r - refresh (you can check what will be saved)" << endl;
 
+	float sobelx_data1[16] = { 0,1,1,0,1,0,0,1,-1,0,0,-1,0,-1,-1,0 };
+	Mat sobelx1 = Mat(4, 4, CV_32F, sobelx_data1);
+
+	float sobelx_data2[16] = { 0,-1,-1,0,-1,0,0,-1,1,0,0,1,0,1,1,0 };
+	Mat sobelx2 = Mat(4, 4, CV_32F, sobelx_data2);
+
+	float sobelx_data3[16] = { 0,1,-1,0,1,0,0,-1,1,0,0,-1,0,1,-1,0 };
+	Mat sobelx3 = Mat(4, 4, CV_32F, sobelx_data3);
+
+	float sobelx_data4[16] = { 0,-1,1,0,-1,0,0,1,-1,0,0,1,0,-1,1,0 };
+	Mat sobelx4 = Mat(4, 4, CV_32F, sobelx_data4);
 
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
@@ -217,10 +228,12 @@ int main(int argc, const char **argv) {
 
 		img = imread(argv[k], 0);    // loading the image in grayscale (classifier was trained on greyscale images)
 		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
-
+		Mat imgLCr2p;
 		Mat imgr2p = r2pTransform(img);
 		if(!imgLC.empty())
-		Mat imgLCr2p = r2pTransform(imgLC);
+		imgLCr2p = r2pTransform(imgLC);
+
+
 
 		if (img.empty())
 		{
@@ -256,6 +269,9 @@ int main(int argc, const char **argv) {
 			temp = k - 3;// number of image
 
 						 // converting variable "temp" into string type
+
+
+
 			std::ostringstream sss;
 			sss << temp;
 			string str1 = sss.str();
@@ -367,12 +383,47 @@ int main(int argc, const char **argv) {
 
 			}
 
+
+			Mat outputLow, outputHigh, outputSobel, outputSobel2, outputSobel3, outputSobel4;
+			//filter2D(image, outputLow, -1, kernelLow,Point(-1,-1),0,BORDER_REPLICATE);
+			//filter2D(image, outputHigh, -1, kernelHigh, Point(-1, -1), 0, BORDER_REPLICATE);
+			filter2D(imgLCr2p, outputSobel, -1, sobelx1, Point(-1, -1), 0, BORDER_REPLICATE);
+			//filter2D(image, outputSobel2, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
+			filter2D(outputSobel, outputSobel, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
+
+			filter2D(imgLCr2p, outputSobel3, -1, sobelx3, Point(-1, -1), 0, BORDER_REPLICATE);
+			//filter2D(image, outputSobel4, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
+			filter2D(outputSobel3, outputSobel3, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
+
+			Mat out;
+			//bitwise_and(outputSobel, outputSobel3, out);
+			out = outputSobel + outputSobel3;
+			Mat hOut;
+			out.convertTo(hOut, CV_8U);
+			imshow("OutPut", out);
+			vector<vector<Point>> cont;
+			vector<Vec4i> hierarchy;
+			threshold(out, out, 120, 255, THRESH_BINARY);
+			imshow("OutPutBin", out);
+			//findContours(hOut, cont, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE); //RETR_CCOMP wyrzuca wszystkie kontury z hierarchia
+
+
+			Mat o = Mat(imgLC.size(), imgLC.type(), Scalar(0));
+			for (int i = 0; i < cont.size(); i++) // TRZEBA USTAWIC TERAZ WSZYSTKIE PIKSELE KTÓRE S¥ WEWN¥TRZ WYKRYT B¥BLI NA CZARNE, ¯EBY NIE MIESZA£Y W WYKRYWANIU TYCH NA KRAWEDZI.
+			{
+				//if (hierarchy[i][2] != -1)
+				//if(isContourConvex(cont[i]))
+					//drawContours(o, cont, i, Scalar(255)); // AT THIS STAGE WE SHOULD REMOVE CONTOURS WHICH ARE WITHIN OTHER CONTOURS :V and before that we need to inverse edge of picture. 255 to 0 and 0 to 255.
+			}
+
+			imshow("Circles", o);
+
 			while (keepProcessing) {
 				imshow(windowName, img1);
 				//imshow("With Lense Cleaning", img1LC);
-				//key = waitKey(20);
+				key = waitKey(20);
 
-				key = 'n';
+				//key = 'n';
 				// Drawing droplets marked by user
 				if (key == 'd') {
 					int numberOfCircles = floor(points.size() / 3);
