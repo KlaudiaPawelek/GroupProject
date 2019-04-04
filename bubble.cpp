@@ -383,43 +383,75 @@ int main(int argc, const char **argv) {
 
 			}
 
+			//Mat outputLow, outputHigh, outputSobel, outputSobel2, outputSobel3, outputSobel4;
+			////filter2D(image, outputLow, -1, kernelLow,Point(-1,-1),0,BORDER_REPLICATE);
+			////filter2D(image, outputHigh, -1, kernelHigh, Point(-1, -1), 0, BORDER_REPLICATE);
+			//filter2D(imgLCr2p, outputSobel, -1, sobelx1, Point(-1, -1), 0, BORDER_REPLICATE);
+			////filter2D(image, outputSobel2, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
+			//filter2D(outputSobel, outputSobel, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
+			//
+			//filter2D(imgLCr2p, outputSobel3, -1, sobelx3, Point(-1, -1), 0, BORDER_REPLICATE);
+			////filter2D(image, outputSobel4, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
+			//filter2D(outputSobel3, outputSobel3, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
+			//
+			//Mat out;
+			////bitwise_and(outputSobel, outputSobel3, out);
+			//out = outputSobel + outputSobel3;
+			//Mat hOut;
+			//out.convertTo(hOut, CV_8U);
+			//imshow("OutPut", out);
+			//vector<vector<Point>> cont;
+			//vector<Vec4i> hierarchy;
+			//threshold(out, out, 70, 255, THRESH_BINARY);
+			//
+			//for (int n = 0; n < centers.size(); n++)
+			//{
+			//	circle(out, centers[n], radiuses[n], Scalar(0), -1);
+			//}
+			//Mat cannyOut;
+			//Mat thresh;
+			//threshold(out, thresh, 254, 255, THRESH_BINARY);
+			//Canny(out, cannyOut, 170, 240, 7);
+			//imshow("Canny", cannyOut);
+			//imshow("Threshold", thresh);
+			//Mat dilate,erode;
+			//Mat openKernel = Mat(Size(2, 2), CV_8UC1, Scalar(1)); //zrobic znowu erode i dilate osobno :v
+			//Mat outOpen;
+			//morphologyEx(out, outOpen, MORPH_OPEN, openKernel,Point(-1,-1),2, BORDER_REPLICATE);
+			//rectangle(out, Rect(Point(0, 0), Point(out.cols - 1, out.rows - 1)), Scalar(255), 1);
+			////imshow("OutPutBinClose", outOpen);
+			//findContours(thresh, cont, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
 
-			Mat outputLow, outputHigh, outputSobel, outputSobel2, outputSobel3, outputSobel4;
-			//filter2D(image, outputLow, -1, kernelLow,Point(-1,-1),0,BORDER_REPLICATE);
-			//filter2D(image, outputHigh, -1, kernelHigh, Point(-1, -1), 0, BORDER_REPLICATE);
-			filter2D(imgLCr2p, outputSobel, -1, sobelx1, Point(-1, -1), 0, BORDER_REPLICATE);
-			//filter2D(image, outputSobel2, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
-			filter2D(outputSobel, outputSobel, -1, sobelx2, Point(-1, -1), 0, BORDER_REPLICATE);
 
-			filter2D(imgLCr2p, outputSobel3, -1, sobelx3, Point(-1, -1), 0, BORDER_REPLICATE);
-			//filter2D(image, outputSobel4, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
-			filter2D(outputSobel3, outputSobel3, -1, sobelx4, Point(-1, -1), 0, BORDER_REPLICATE);
+			//Mat o = Mat(imgLC.size(), imgLC.type(), Scalar(0));
+			//
+			//for (int i = 0; i < cont.size(); i++)
+			//{
+			//	int contPointConuter=0;
+			//	Point contPoint,contPointPrev;
+			//	int d = 0;
+			//	if(contourArea(cont[i])>20 && hierarchy[i][2]!=-1)
+			//	{
+			//		for (int j = 0; j < cont[i].size(); j++)
+			//		{
+			//			if (cont[i][j].x == (thresh.cols - 1) || cont[i][j].x == 0)
+			//			{
+			//				contPointConuter++;
+			//				if (contPointConuter >= 4)
+			//				{
+			//					drawContours(o, cont, i, Scalar(255), -1);
+			//					break;
+			//				}
+			//			}
+			//		}
+			//		
+			//	}
+			//}
 
-			Mat out;
-			//bitwise_and(outputSobel, outputSobel3, out);
-			out = outputSobel + outputSobel3;
-			Mat hOut;
-			out.convertTo(hOut, CV_8U);
-			imshow("OutPut", out);
-			vector<vector<Point>> cont;
-			vector<Vec4i> hierarchy;
-			threshold(out, out, 120, 255, THRESH_BINARY);
-			imshow("OutPutBin", out);
-			//findContours(hOut, cont, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE); //RETR_CCOMP wyrzuca wszystkie kontury z hierarchia
-
-
-			Mat o = Mat(imgLC.size(), imgLC.type(), Scalar(0));
-			for (int i = 0; i < cont.size(); i++) // TRZEBA USTAWIC TERAZ WSZYSTKIE PIKSELE KTÓRE S¥ WEWN¥TRZ WYKRYT B¥BLI NA CZARNE, ¯EBY NIE MIESZA£Y W WYKRYWANIU TYCH NA KRAWEDZI.
-			{
-				//if (hierarchy[i][2] != -1)
-				//if(isContourConvex(cont[i]))
-					//drawContours(o, cont, i, Scalar(255)); // AT THIS STAGE WE SHOULD REMOVE CONTOURS WHICH ARE WITHIN OTHER CONTOURS :V and before that we need to inverse edge of picture. 255 to 0 and 0 to 255.
-			}
-
-			imshow("Circles", o);
+			//imshow("Circles", o);
 
 			while (keepProcessing) {
-				imshow(windowName, img1);
+				imshow(windowName, img1);				
 				//imshow("With Lense Cleaning", img1LC);
 				key = waitKey(20);
 
