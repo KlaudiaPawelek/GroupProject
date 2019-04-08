@@ -24,6 +24,8 @@ double calibration_factor;
 string name_of_classifier;
 int radiusS = 0;
 
+Ptr<ml::ANN_MLP> ann;
+
 Mat img;
 Mat img1;
 CascadeClassifier cascade;
@@ -40,6 +42,47 @@ string path;                     // path to output folder
 int temp;
 
 double d2, d3, SMD;              // to calculate Sauter mean diameter
+
+
+Mat removeLeftBorder(Mat input)
+{
+	Mat tmp = Mat(input.size().height, input.size().width - 2, input.type());
+	for (int i = 0; i < input.rows; i++)
+	{
+		for (int j = 2; j < input.cols; j++)
+		{
+			tmp.at<uchar>(i, j - 2) = input.at<uchar>(i, j);
+		}
+	}
+	return tmp;
+}
+Mat ExtendRect(Rect r, Mat sourceImage)
+{
+	Point tl = r.tl(); //top left corner Point
+	Point br = r.br(); //bottom right corner Point
+	int xIncrease = cvRound(r.width*0.15);
+	int yIncrease = cvRound(r.height*0.15);
+	if (tl.x - xIncrease > 0)
+		tl.x -= xIncrease;
+	else
+		tl.x = 0;
+	if (tl.y - yIncrease > 0)
+		tl.y -= yIncrease;
+	else
+		tl.y = 0;
+	if (br.x + xIncrease < sourceImage.cols)
+		br.x += xIncrease;
+	else
+		br.x = sourceImage.cols;
+	if (br.y + yIncrease < sourceImage.rows)
+		br.y += yIncrease;
+	else
+		br.y = sourceImage.rows;
+
+	Mat RectPart = sourceImage(Range(tl.y, br.y), Range(tl.x, br.x));
+	return RectPart;
+
+}
 
 /*******************************************************************/
 //Raise to power transform and logarithm transform.
@@ -63,14 +106,101 @@ Mat r2pTransform(Mat input)
 	return logImage; //returning transformed image
 }
 
+vector<pair<int, Point>> findEdgeBubbles(Mat img)
+{
+	vector<pair<int, Point>> circles;
+	float annResult;
+	int noOfFeatures = 3603;
+	Mat testSample = Mat(1, noOfFeatures, CV_32FC1, Scalar(0));
+	//Mat img = imread(argv[argP], IMREAD_GRAYSCALE);
+	Mat imgCleanCopy = img.clone();
+	Mat lbrImg = removeLeftBorder(img);
+
+	Mat o = Mat(lbrImg.size(), lbrImg.type(), Scalar(0));
+	Mat poly = o.clone();
+	Point2f circleCenter;
+	float circleRadius;
+
+	Mat contImage = Mat(lbrImg.size(), lbrImg.type(), Scalar(0));
+	Mat singleContourImage = Mat(lbrImg.size(), lbrImg.type(), Scalar(0));
+
+	Mat out;
+	vector<vector<Point>> contours;
+	vector<vector<Point>> circleContour;
+	vector<Point> polygonContour;
+
+	//some image preprocessing
+	Mat r2p = r2pTransform(lbrImg);
+	out = r2p.clone();
+	threshold(out, out, 120, 255, THRESH_BINARY);
+	Mat cannyOut;
+	Canny(out, cannyOut, 50, 200, 5);
+	findContours(cannyOut, contours, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+
+	for (int i = 0; i < contours.size(); i++)
+	{
+		int contourPointOnEdgeCounter = 0;
+		if (contourArea(contours[i]) > 20)
+		{
+			for (int j = 0; j < contours[i].size(); j++)
+			{
+				if (contours[i][j].x == (lbrImg.cols - 1) || contours[i][j].x == 0 || contours[i][j].y == 0 || contours[i][j].y == (lbrImg.rows - 1))
+				{
+					contourPointOnEdgeCounter++;
+					if (contourPointOnEdgeCounter >= 1)
+					{
+						approxPolyDP(contours[i], polygonContour, 0.1, true);
+						minEnclosingCircle(polygonContour, circleCenter, circleRadius);
+						circle(singleContourImage, circleCenter, circleRadius, Scalar(255));
+						findContours(singleContourImage, circleContour, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+
+						Rect r = minAreaRect(circleContour[0]).boundingRect();
+
+						Mat RectPart = ExtendRect(r, lbrImg);
+						resize(RectPart, RectPart, Size(60, 60));
+
+
+						testSample.at<float>(0, 0) = (float)circleCenter.x;
+						testSample.at<float>(0, 1) = (float)circleCenter.y;
+						testSample.at<float>(0, 2) = (float)circleRadius;
+						int p = 3;
+						for (int k = 0; k < RectPart.rows; k++)
+						{
+							for (int l = 0; l < RectPart.cols; l++)
+							{
+								testSample.at<float>(0, p) = (float)RectPart.at<uchar>(k, l) / 255;
+								p++;
+							}
+
+						}
+						annResult = ann->predict(testSample);
+
+						if (annResult == 0)
+						{
+							if (circleCenter.x >= 0 && circleCenter.y >= 0 && circleCenter.x <= lbrImg.rows && circleCenter.y <= lbrImg.cols)
+							{
+								circles.push_back(make_pair(circleRadius, circleCenter));
+							}
+						}
+						break;
+					}
+				}
+			}
+
+		}
+		singleContourImage = Mat(lbrImg.size(), lbrImg.type(), Scalar(0));
+	}
+	return circles;
+}
+
 //Lens Cleanign implemented based on Karols code
 vector<Mat> LensCleaning(int argc, const char **argv)
 {
-	vector<Mat> returnVMat(argc-4); //creating vector of Mat which will store images after lens cleaning
+	vector<Mat> returnVMat(argc-5); //creating vector of Mat which will store images after lens cleaning
 	if (argc > 30) //lens cleaning is performed only if there is sufficient number of images provided
 	{
 		auto begin = chrono::system_clock::now();
-		Mat image = imread(argv[4], IMREAD_GRAYSCALE); //reading first image
+		Mat image = imread(argv[5], IMREAD_GRAYSCALE); //reading first image
 		Mat r2pImage = r2pTransform(image); //performing r2pow and log transform
 		image = r2pImage.clone();
 		image.convertTo(image, CV_16UC1); //conversion to 16bit image
@@ -84,21 +214,17 @@ vector<Mat> LensCleaning(int argc, const char **argv)
 		}
 
 		Mat imageMean = Mat(image.size(), CV_16UC1,Scalar(0)); //alocating Mat object which will store average pixel value
-		imageMean = sumImage / (argc-4); //divding sum image by number of all images-> calculating mean of each pixel
+		imageMean = sumImage / (argc-5); //divding sum image by number of all images-> calculating mean of each pixel
 		imageMean.convertTo(imageMean, CV_8UC1); //convertion back to 8bit image
 
 		int avgGrayLevel = 0; //average gray level value required to maitain the same gray level after noise removal
 		avgGrayLevel=sum(imageMean)[0]; //summing all pixels to one value
-		//cout << avgGrayLevel << endl;
 		avgGrayLevel = avgGrayLevel / (image.rows*image.cols); //dividing sumed pixels values by number of pixels
-		//cout << "image loaded, parameters for lens cleaning calculated";
 		
 		auto end = chrono::system_clock::now();
 		chrono::duration<double> elapsed_seconds = end - begin;
-		//cout << "Time :" << elapsed_seconds.count() << endl; //about 2 seconds
-		for (int i = 4; i < argc; i++)
+		for (int i = 5; i < argc; i++)
 		{
-			begin = chrono::system_clock::now();
 			Mat out = imread(argv[i], IMREAD_GRAYSCALE); //reading first image
 			//out.convertTo(out, CV_16UC1);
 			imageMean.convertTo(imageMean, CV_8UC1); 
@@ -106,13 +232,9 @@ vector<Mat> LensCleaning(int argc, const char **argv)
 			absdiff(out, imageMean, out); //performing lens cleaning based on equation from Karols paper/code
 			out = out + avgGrayLevel;
 			out.convertTo(out, CV_8UC1);
-			end = chrono::system_clock::now();
 			elapsed_seconds = end - begin;
 			bitwise_not(out, out); //
-			returnVMat[i - 4] = out; //assigning cleaned image to return vector
-			//cout << "Time :" << elapsed_seconds.count() << endl; //about 0.03 second
-			//imshow("LensCleaning", out);
-			//waitKey();
+			returnVMat[i - 5] = out; //assigning cleaned image to return vector
 		}
 	}
 	return returnVMat; //returning images in vector
@@ -120,39 +242,46 @@ vector<Mat> LensCleaning(int argc, const char **argv)
 
 int main(int argc, const char **argv) {
 
-	// Instroctions for user
-	//cout << "Choose option that you need: " << endl;
-	//cout << "To add your droplet to detected droplets choose three points on the perimeter using left mouse button and submit using 'd' " << endl;
-	//cout << "To remove droplet use right mouse button: click inside all droplets that should be removed and submit your choice by clicking 'e'" << endl;
+	// Instructions for user
 	//cout << "n - Next image (automatically saving image and all your changes" << endl;
-	//cout << "r - refresh (you can check what will be saved)" << endl;
 	vector<int> saveParams;
 	saveParams.push_back(IMWRITE_PNG_COMPRESSION);
 	saveParams.push_back(9);
+
+	ann = ml::ANN_MLP::load(argv[4]);
+
+	if (!ann->isTrained())
+	{
+		cout << "Network not trained!" << endl;
+		return -1;
+	}
+
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
-	vector<Mat> imagesAfterLC(argc - 4);
+	vector<Mat> imagesAfterLC(argc - 5);
 	auto start = chrono::system_clock::now();
 	imagesAfterLC= LensCleaning(argc, argv);
 
-										 // Loop through all images in the input folder, it starts from 4 because path to images is 5th argument on the command window
-	for (int k = 4; k < argc; k++) 
+										 // Loop through all images in the input folder, it starts from 5 because path to images is 5th argument on the command window
+	for (int k = 5; k < argc; k++) 
 	{
 
 		path = argv[2];                                        // path to output folder
 		name_of_file = path + "\\outputFile.txt";       // creating file with diameters in pixel unit
 		keepProcessing = true;
 
-		Mat imgLC = imagesAfterLC[k - 4];
-		Mat img1LC = imagesAfterLC[k - 4];
+		Mat imgLC = imagesAfterLC[k - 5];
+		Mat img1LC = imagesAfterLC[k - 5];
 
-		img = imread(argv[k], 0);    // loading the image in grayscale (classifier was trained on greyscale images)
+		img = removeLeftBorder(imread(argv[k], 0));    // loading the image in grayscale (classifier was trained on greyscale images)
 		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
 		Mat imgLCr2p;
 		Mat imgr2p = r2pTransform(img);
+
 		if(!imgLC.empty())
-		imgLCr2p = r2pTransform(imgLC);
+			imgLCr2p = r2pTransform(imgLC);
+
 
 		if (img.empty())
 		{
@@ -280,16 +409,32 @@ int main(int argc, const char **argv) {
 				}
 
 			}
+			Mat NN;
+			if (!imgLC.empty())
+			{
+				NN = r2pTransform(imgLC);
+			}
+			else
+			{
+				NN = imgr2p;
+			}
+			
+			vector<pair<int, Point>> edge = findEdgeBubbles(NN);
+			for (int i = 0; i < edge.size(); i++)
+			{
+				circle(img1, edge[i].second, edge[i].first, Scalar(255, 0, 0));
+			}
 
 			while (keepProcessing) {
-				//imshow(windowName, img1);
-				//key = waitKey(20);
-				key = 'n';
+				imshow(argv[k], img1);
+				key = waitKey(20);
+			//	key = 'n';
 
 				// Going to the next image or finishing programme if current image is the last one
 				if (key == 'n') {
 					imwrite(tempPath, img1,saveParams);
 					keepProcessing = false;
+					destroyAllWindows();
 				}
 
 			}
