@@ -56,7 +56,7 @@ Mat removeLeftBorder(Mat input)
 	}
 	return tmp;
 }
-Mat ExtendRect(Rect r, Mat sourceImage)
+Mat ExtendRect(Rect& r, Mat sourceImage)
 {
 	Point tl = r.tl(); //top left corner Point
 	Point br = r.br(); //bottom right corner Point
@@ -78,7 +78,7 @@ Mat ExtendRect(Rect r, Mat sourceImage)
 		br.y += yIncrease;
 	else
 		br.y = sourceImage.rows;
-
+	r = Rect(tl, br);
 	Mat RectPart = sourceImage(Range(tl.y, br.y), Range(tl.x, br.x));
 	return RectPart;
 
@@ -106,15 +106,16 @@ Mat r2pTransform(Mat input)
 	return logImage; //returning transformed image
 }
 
-vector<pair<int, Point>> findEdgeBubbles(Mat img)
+vector<pair<int, Point>> findEdgeBubbles(Mat img,vector<Point> haarDetectedCenters)
 {
+	bool nextCont = false;
 	vector<pair<int, Point>> circles;
-	float annResult;
+	float annResult=0;
 	int noOfFeatures = 3603;
 	Mat testSample = Mat(1, noOfFeatures, CV_32FC1, Scalar(0));
 	//Mat img = imread(argv[argP], IMREAD_GRAYSCALE);
 	Mat imgCleanCopy = img.clone();
-	Mat lbrImg = removeLeftBorder(img);
+	Mat lbrImg = img.clone();
 
 	Mat o = Mat(lbrImg.size(), lbrImg.type(), Scalar(0));
 	Mat poly = o.clone();
@@ -149,16 +150,27 @@ vector<pair<int, Point>> findEdgeBubbles(Mat img)
 					contourPointOnEdgeCounter++;
 					if (contourPointOnEdgeCounter >= 1)
 					{
-						approxPolyDP(contours[i], polygonContour, 0.1, true);
+						approxPolyDP(contours[i], polygonContour, 1, true);
 						minEnclosingCircle(polygonContour, circleCenter, circleRadius);
 						circle(singleContourImage, circleCenter, circleRadius, Scalar(255));
 						findContours(singleContourImage, circleContour, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
 
 						Rect r = minAreaRect(circleContour[0]).boundingRect();
-
+						for (int k = 0; k < haarDetectedCenters.size(); k++) //filtering out circles which are already detected
+						{
+							if (haarDetectedCenters[k].inside(r))
+							{
+								nextCont = true;
+								break;
+							}
+						}
+						if (nextCont)
+						{
+							nextCont = false;
+							break;
+						}
 						Mat RectPart = ExtendRect(r, lbrImg);
 						resize(RectPart, RectPart, Size(60, 60));
-
 
 						testSample.at<float>(0, 0) = (float)circleCenter.x;
 						testSample.at<float>(0, 1) = (float)circleCenter.y;
@@ -196,13 +208,12 @@ vector<pair<int, Point>> findEdgeBubbles(Mat img)
 //Lens Cleanign implemented based on Karols code
 vector<Mat> LensCleaning(int argc, const char **argv)
 {
-	vector<Mat> returnVMat(argc-5); //creating vector of Mat which will store images after lens cleaning
+	vector<Mat> returnVMat; //creating vector of Mat which will store images after lens cleaning
 	if (argc > 30) //lens cleaning is performed only if there is sufficient number of images provided
 	{
 		auto begin = chrono::system_clock::now();
 		Mat image = imread(argv[5], IMREAD_GRAYSCALE); //reading first image
-		Mat r2pImage = r2pTransform(image); //performing r2pow and log transform
-		image = r2pImage.clone();
+		//Mat r2pImage = r2pTransform(image); //performing r2pow and log transform
 		image.convertTo(image, CV_16UC1); //conversion to 16bit image
 		Mat sumImage = Mat(image.size(), CV_16UC1,Scalar(0)); //alocating Mat object which will store sum of pixels
 		//looping through rest of images to add all images to one
@@ -217,24 +228,23 @@ vector<Mat> LensCleaning(int argc, const char **argv)
 		imageMean = sumImage / (argc-5); //divding sum image by number of all images-> calculating mean of each pixel
 		imageMean.convertTo(imageMean, CV_8UC1); //convertion back to 8bit image
 
-		int avgGrayLevel = 0; //average gray level value required to maitain the same gray level after noise removal
-		avgGrayLevel=sum(imageMean)[0]; //summing all pixels to one value
-		avgGrayLevel = avgGrayLevel / (image.rows*image.cols); //dividing sumed pixels values by number of pixels
+		int avgGrayLevel = mean(imageMean)[0]; //average gray level value required to maitain the same gray level after noise removal
+		//avgGrayLevel=sum(imageMean)[0]; //summing all pixels to one value
+		//avgGrayLevel = avgGrayLevel / (image.rows*image.cols); //dividing sumed pixels values by number of pixels
 		
 		auto end = chrono::system_clock::now();
 		chrono::duration<double> elapsed_seconds = end - begin;
 		for (int i = 5; i < argc; i++)
 		{
 			Mat out = imread(argv[i], IMREAD_GRAYSCALE); //reading first image
-			//out.convertTo(out, CV_16UC1);
-			imageMean.convertTo(imageMean, CV_8UC1); 
-			//subtract(out, imageMean, out);
-			absdiff(out, imageMean, out); //performing lens cleaning based on equation from Karols paper/code
-			out = out + avgGrayLevel;
-			out.convertTo(out, CV_8UC1);
-			elapsed_seconds = end - begin;
-			bitwise_not(out, out); //
-			returnVMat[i - 5] = out; //assigning cleaned image to return vector
+			for (int j = 0; j < out.rows; j++)
+			{
+				for (int l = 0; l < out.cols; l++)
+				{
+					out.at<uchar>(j, l) = out.at<uchar>(j, l)- imageMean.at<uchar>(j, l)+avgGrayLevel;
+				}
+			}
+			returnVMat.push_back(out); //assigning cleaned image to return vector
 		}
 	}
 	return returnVMat; //returning images in vector
@@ -259,7 +269,7 @@ int main(int argc, const char **argv) {
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
-	vector<Mat> imagesAfterLC(argc - 5);
+	vector<Mat> imagesAfterLC;
 	auto start = chrono::system_clock::now();
 	imagesAfterLC= LensCleaning(argc, argv);
 
@@ -271,16 +281,19 @@ int main(int argc, const char **argv) {
 		name_of_file = path + "\\outputFile.txt";       // creating file with diameters in pixel unit
 		keepProcessing = true;
 
-		Mat imgLC = imagesAfterLC[k - 5];
-		Mat img1LC = imagesAfterLC[k - 5];
+		Mat imgLC;
+
+		if(imagesAfterLC.size())
+		imgLC = removeLeftBorder(imagesAfterLC[k - 5]);
 
 		img = removeLeftBorder(imread(argv[k], 0));    // loading the image in grayscale (classifier was trained on greyscale images)
 		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
+
 		Mat imgLCr2p;
 		Mat imgr2p = r2pTransform(img);
 
-		if(!imgLC.empty())
-			imgLCr2p = r2pTransform(imgLC);
+		if(imagesAfterLC.size())
+			imgLCr2p = removeLeftBorder(r2pTransform(imgLC));
 
 
 		if (img.empty())
@@ -301,10 +314,10 @@ int main(int argc, const char **argv) {
 			// vector "drops" stores information about rectangles coordinates
 			cascade.detectMultiScale(img, drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
 
-			if(!imgLC.empty())
-			cascade.detectMultiScale(imgLC, dropsLC, 1.05, 3, 0, Size(5, 5), Size(570, 570));
+			if (imagesAfterLC.size())
+			cascade.detectMultiScale(imgLCr2p, dropsLC, 1.05, 3, 0, Size(5, 5), Size(570, 570));
 
-			temp = k - 3;// number of image
+			temp = k - 4;// number of image
 
 						 // converting variable "temp" into string type
 
@@ -342,31 +355,11 @@ int main(int argc, const char **argv) {
 				// calculating radius of droplets
 				int radius = cvRound(abs(drops[i].width*0.5));
 				int diameter = 2 * radius;
-				Point tl = r.tl(); //top left corner Point
-				Point br = r.br(); //bottom right corner Point
-				int xIncrease = cvRound(drops[i].width*0.3);
-				int yIncrease = cvRound(drops[i].height*0.3);
-				if (tl.x - xIncrease > 0)
-					tl.x -= xIncrease;
-				else 
-					tl.x = 0;
-				if (tl.y - yIncrease > 0)
-					tl.y -= yIncrease;
-				else 
-					tl.y = 0;
-				if (br.x + xIncrease < img1.cols)
-					br.x += xIncrease;
-				else
-					br.x = img1.cols;
-				if (br.y + yIncrease < img1.rows)
-					br.y += yIncrease;
-				else 
-					br.y = img1.rows;
 
-				Rect circleRectangle;
-				Mat circlePart = imgr2p(Range(tl.y,br.y), Range(tl.x, br.x));
+				Mat circlePart = ExtendRect(r, imgr2p);
+
 				vector<Vec3f> circlesDetected;
-				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 180, 80, radius*0.7, radius*1.3);
+				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 180, 80, radius*0.8, radius*1.2);
 
 				int cIt = 0;
 				double newRadius = 0;
@@ -386,18 +379,18 @@ int main(int argc, const char **argv) {
 					newCenter.x /= circlesDetected.size();
 					newCenter.y /= circlesDetected.size();
 					newRadiusAvg /= circlesDetected.size();
-					for (int m = 0; m < dropsLC.size(); m++) {
-						Rect r = dropsLC[m];
+					for (int m = 0; m < dropsLC.size(); m++) 
+					{
 						// calculating the center of droplet
 						Point center(dropsLC[m].x + dropsLC[m].width*0.5, dropsLC[m].y + dropsLC[m].height*0.5 + 3);
-						if (center.x > 0.9*(newCenter.x + (tl.x)) && center.x < 1.1*(newCenter.x + (tl.x)) && center.y>0.9*(newCenter.y + (tl.y)) && center.y < 1.1*(newCenter.y + (tl.y)))
+						if (center.x > 0.9*(newCenter.x + (r.tl().x)) && center.x < 1.1*(newCenter.x + (r.tl().x)) && center.y>0.9*(newCenter.y + (r.tl().y)) && center.y < 1.1*(newCenter.y + (r.tl().y)))
 						{
 							radius= cvRound(abs(dropsLC[m].width*0.5));
 							break;
 						}
 					}
-					circle(img1, Point(newCenter.x + (tl.x), newCenter.y + (tl.y)), radius, Scalar(0, 255, 0), 1); //drawing circle using center point of hough and radius of Haar
-					centers.push_back(Point(newCenter.x + (tl.x), newCenter.y + (tl.y)));
+					circle(img1, Point(newCenter.x + (r.tl().x), newCenter.y + (r.tl().y)), radius, Scalar(58, 71, 244), 2); //drawing circle using center point of hough and radius of Haar
+					centers.push_back(Point(newCenter.x + (r.tl().x), newCenter.y + (r.tl().y)));
 					radiuses.push_back(radius);
 
 				}
@@ -405,41 +398,42 @@ int main(int argc, const char **argv) {
 				{
 					centers.push_back(center);
 					radiuses.push_back(radius);
-					circle(img1, center, radius, Scalar(0, 255, 0), 1);
+					circle(img1, center, radius, Scalar(58, 71, 244),2);
 				}
 
 			}
 			Mat NN;
 			if (!imgLC.empty())
 			{
-				NN = r2pTransform(imgLC);
+				NN = imgLC;
 			}
 			else
 			{
-				NN = imgr2p;
+				NN = img;
 			}
 			
-			vector<pair<int, Point>> edge = findEdgeBubbles(NN);
+			vector<pair<int, Point>> edge = findEdgeBubbles(NN,centers);
 			for (int i = 0; i < edge.size(); i++)
 			{
-				circle(img1, edge[i].second, edge[i].first, Scalar(255, 0, 0));
+				circle(img1, edge[i].second, edge[i].first, Scalar(58, 71, 244),2);
 			}
 
-			while (keepProcessing) {
-				imshow(argv[k], img1);
-				key = waitKey(20);
-			//	key = 'n';
+			while (keepProcessing) 
+			{
+				//imshow(argv[k], img1);
+				//key = waitKey(20);
+				key = 'n';
 
 				// Going to the next image or finishing programme if current image is the last one
 				if (key == 'n') {
 					imwrite(tempPath, img1,saveParams);
 					keepProcessing = false;
-					destroyAllWindows();
+					//destroyAllWindows();
 				}
 
 			}
 
-
+			
 			// Saving information from current image in files. Mean diameter, min, max and SMD
 			file.open(name_of_file, std::ofstream::app);
 			file << "Nb : " << radiuses.size() << endl;
