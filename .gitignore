@@ -4,3 +4,5 @@
 */
 # Whitelist the file you're interested in. 
 !*.cpp
+!*.h
+!*.cs
