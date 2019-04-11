@@ -1,9 +1,11 @@
+#include <stdlib.h>
+#include <crtdbg.h>
 #include <opencv2/opencv.hpp>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <fstream>
-
+#include <filesystem>
 #include <chrono>
 
 using namespace cv;
@@ -281,7 +283,7 @@ bool classifyImageType(string classifierName)
 		e.what();
 		return false;
 	}
-
+	
 	Mat rst = Mat(1, 5, CV_32FC1, Scalar(0));
 	vector<int> classVote(5, 0);
 	for (int i = 0; i < images.size(); i++)
@@ -318,7 +320,7 @@ int main(int argc, const char **argv) {
 	vector<int> saveParams;
 	saveParams.push_back(IMWRITE_PNG_COMPRESSION);
 	saveParams.push_back(9);
-
+	//remove("outputFile.txt");
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
@@ -336,12 +338,6 @@ int main(int argc, const char **argv) {
 
 	imagesAfterLC = LensCleaning();
 
-	//imshow("A", imread(argv[5]));
-	//imshow("B", removeLeftBorder(images[1]));
-	//imshow("C", r2pTransform(removeLeftBorder(images[1])));
-	//imshow("D", imagesAfterLC[1]);
-	//waitKey();
-
 	string edgeDropletClassifierName = "NN" + to_string(imgType) +".xml";
 							
 	try
@@ -354,19 +350,22 @@ int main(int argc, const char **argv) {
 		cout << "Failed to traing classifier using file " << edgeDropletClassifierName << endl;
 		return -1;
 	}
-	
 
-	if (!ann->isTrained())
+	path = argv[2];
+	name_of_file = path + "outputFile.txt";       // creating file with diameters in pixel unit
+	file.open(name_of_file, ios::trunc | ios::out);
+
+	if (!file.is_open())
 	{
-		
-		
+		cout << "Failed to open file " << name_of_file << endl;
+		return -1;
 	}
 
 	// Loop through all images in the input folder, it starts from 5 because path to images is 5th argument on the command window
 	for (int k = 4; k < argc; k++)
 	{
-		path = argv[2];                                        // path to output folder
-		name_of_file = path + "outputFile.txt";       // creating file with diameters in pixel unit
+		path = argv[2];                                   // path to output folder
+		
 		keepProcessing = true;
 
 		Mat imgLC;
@@ -421,18 +420,7 @@ int main(int argc, const char **argv) {
 			name_of_image = name_of_image + ".jpg";
 			//tempPath = tempPath + "\\";
 			tempPath = tempPath + name_of_image;
-
-			file.open(name_of_file, std::ofstream::app);
-			if (file.is_open())
-			{
-				file << "Name of image: " << name_of_image << endl;
-				file.close();
-			}
-			else
-			{
-				cout << "Failed to open file " << name_of_file << endl;
-				return -1;
-			}
+			file << "Name of image: "<<name_of_image<<endl;
 
 			// iteration through all the vector with detected droplets
 			for (int i = 0; i < drops.size(); i++) 
@@ -554,10 +542,10 @@ int main(int argc, const char **argv) {
 			}
 			
 			imwrite(tempPath, img1,saveParams);
-
+			
 			
 			// Saving information from current image in files. Mean diameter, min, max and SMD
-			file.open(name_of_file, std::ofstream::app);
+			
 			file << "Nb : " << bubblesFiltered.size() << endl;
 			double meanDiameter = 0;
 			double maxDiameter = 0;
@@ -589,9 +577,11 @@ int main(int argc, const char **argv) {
 			file << "Mean : " << (calibration_factor * (meanDiameter/radiuses.size())) << endl;
 			file << "Min : " << calibration_factor*minDiameter << endl;
 			file << "Max : " << calibration_factor*maxDiameter << endl;
-			file.close();
 
-			number_of_drops = number_of_drops + radiuses.size();
+			number_of_drops = number_of_drops + bubblesFiltered.size();
+			edgeBubblesFiltered.clear();
+			bubblesFiltered.clear();
+			bubblesTmp.clear();
 		}
 		// Cleaning all the vectors
 		bubbles.clear();
@@ -626,7 +616,6 @@ int main(int argc, const char **argv) {
 	auto end = chrono::system_clock::now();
 
 	// Sauter Mean Diameter in file : "diametersInMikroMeters.txt"
-	file.open(name_of_file, std::ofstream::app);
 	
 	file << endl<< "NbAll : " << number_of_drops << endl;
 	file << "SMDAll : " << SMD << endl;
@@ -635,7 +624,13 @@ int main(int argc, const char **argv) {
 	file << "MaxAll : " << maxAll << endl;
 	file << "Time : " << chrono::duration_cast<chrono::seconds>(end - start).count()<<" sec"<<endl;
 	file.close();
-
+	images.clear();
+	imagesAfterLC.clear();
+	radiuses.clear();
+	adaptiveThresholdParams.clear();
+	bubbles.clear();
+	edgeBubbles.clear();
 	cout << "Program finished without errors" << endl;
 	return 0;
+	
 }
