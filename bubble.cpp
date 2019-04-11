@@ -302,7 +302,7 @@ bool classifyImageType(string classifierName)
 	int maxIndx = 0;
 	for (int i = 0; i < adaptiveThresholdParams.size(); i++)
 	{
-		if (classVote[i] >= maxTmp)
+		if (classVote[i] > maxTmp)
 		{
 			maxTmp = classVote[i];
 			maxIndx = i;
@@ -336,7 +336,7 @@ int main(int argc, const char **argv) {
 
 	imagesAfterLC = LensCleaning();
 
-	//imshow("A", imread(argv[0]));
+	//imshow("A", imread(argv[4]));
 	//imshow("B", removeLeftBorder(images[0]));
 	//imshow("C", r2pTransform(removeLeftBorder(images[0])));
 	//imshow("D", imagesAfterLC[0]);
@@ -355,6 +355,12 @@ int main(int argc, const char **argv) {
 		return -1;
 	}
 	
+
+	if (!ann->isTrained())
+	{
+		
+		
+	}
 
 	// Loop through all images in the input folder, it starts from 5 because path to images is 5th argument on the command window
 	for (int k = 4; k < argc; k++)
@@ -413,7 +419,7 @@ int main(int argc, const char **argv) {
 			string tempPath = path;
 			string name_of_image = "img" + str1;
 			name_of_image = name_of_image + ".jpg";
-			tempPath = tempPath + "\\";
+			//tempPath = tempPath + "\\";
 			tempPath = tempPath + name_of_image;
 
 			file.open(name_of_file, std::ofstream::app);
