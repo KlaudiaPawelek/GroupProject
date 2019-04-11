@@ -24,7 +24,7 @@ vector<Mat> images;
 vector<pair<int, int>> adaptiveThresholdParams = { make_pair(35,35),make_pair(5,15),make_pair(27,15),make_pair(51,71),make_pair(5,5) }; //size and C
 
 Ptr<ml::ANN_MLP> ann;
-int imgType;
+int imgType=1;
 
 Mat img;
 Mat img1;
@@ -271,12 +271,17 @@ float euclideanDist(Point& p, Point& q) {
 bool classifyImageType(string classifierName)
 {
 	Ptr<ml::ANN_MLP> annIC = ml::ANN_MLP::create();
-	annIC = ml::ANN_MLP::load(classifierName);
-	if (!annIC->isTrained())
+	try
 	{
-		cout << "Error while loading Neural Network for image classifier "<<classifierName<<endl;
+		annIC = ml::ANN_MLP::load(classifierName);
+	}
+	catch (const std::exception& e)
+	{
+		cout << "Error while loading Neural Network for image classifier " << classifierName << endl;
+		e.what();
 		return false;
 	}
+
 	Mat rst = Mat(1, 5, CV_32FC1, Scalar(0));
 	vector<int> classVote(5, 0);
 	for (int i = 0; i < images.size(); i++)
@@ -285,13 +290,19 @@ bool classifyImageType(string classifierName)
 		Mat img = images[i];
 		Mat imgr2p = r2pTransform(img);
 		histC = calcHist(imgr2p);
-		classVote[annIC->predict(histC, rst)]++;
+		int p = annIC->predict(histC, rst);
+		classVote[p]++;
+		if (classVote[p] > images.size() / 2)
+		{
+			imgType = p + 1;
+			return true;
+		}
 	}
 	int maxTmp = 0;
 	int maxIndx = 0;
 	for (int i = 0; i < adaptiveThresholdParams.size(); i++)
 	{
-		if (classVote[i] > maxTmp)
+		if (classVote[i] >= maxTmp)
 		{
 			maxTmp = classVote[i];
 			maxIndx = i;
@@ -313,7 +324,7 @@ int main(int argc, const char **argv) {
 	number_of_drops = 0;                 // counter of droplets on all images
 	for (int i = 4; i < argc; i++)
 	{
-		images.push_back(imread(argv[i], IMREAD_GRAYSCALE));
+		images.push_back(removeLeftBorder(imread(argv[i], IMREAD_GRAYSCALE)));
 	}
 	vector<Mat> imagesAfterLC;
 	auto start = chrono::system_clock::now();
@@ -325,15 +336,25 @@ int main(int argc, const char **argv) {
 
 	imagesAfterLC = LensCleaning();
 
-	string edgeDropletClassifierName = "NN" + to_string(imgType) +".xml";
-																														
-	ann=ann->load(edgeDropletClassifierName);
+	//imshow("A", imread(argv[0]));
+	//imshow("B", removeLeftBorder(images[0]));
+	//imshow("C", r2pTransform(removeLeftBorder(images[0])));
+	//imshow("D", imagesAfterLC[0]);
+	//waitKey();
 
-	if (!ann->isTrained())
+	string edgeDropletClassifierName = "NN" + to_string(imgType) +".xml";
+							
+	try
 	{
+		ann = ann->load(edgeDropletClassifierName);
+	}
+	catch (const std::exception& e)
+	{
+		e.what();
 		cout << "Failed to traing classifier using file " << edgeDropletClassifierName << endl;
 		return -1;
 	}
+	
 
 	// Loop through all images in the input folder, it starts from 5 because path to images is 5th argument on the command window
 	for (int k = 4; k < argc; k++)
