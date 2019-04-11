@@ -336,10 +336,10 @@ int main(int argc, const char **argv) {
 
 	imagesAfterLC = LensCleaning();
 
-	//imshow("A", imread(argv[4]));
-	//imshow("B", removeLeftBorder(images[0]));
-	//imshow("C", r2pTransform(removeLeftBorder(images[0])));
-	//imshow("D", imagesAfterLC[0]);
+	//imshow("A", imread(argv[5]));
+	//imshow("B", removeLeftBorder(images[1]));
+	//imshow("C", r2pTransform(removeLeftBorder(images[1])));
+	//imshow("D", imagesAfterLC[1]);
 	//waitKey();
 
 	string edgeDropletClassifierName = "NN" + to_string(imgType) +".xml";
@@ -366,7 +366,7 @@ int main(int argc, const char **argv) {
 	for (int k = 4; k < argc; k++)
 	{
 		path = argv[2];                                        // path to output folder
-		name_of_file = path + "\\outputFile.txt";       // creating file with diameters in pixel unit
+		name_of_file = path + "outputFile.txt";       // creating file with diameters in pixel unit
 		keepProcessing = true;
 
 		Mat imgLC;
