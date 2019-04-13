@@ -1,5 +1,3 @@
-#include <stdlib.h>
-#include <crtdbg.h>
 #include <opencv2/opencv.hpp>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -176,14 +174,7 @@ vector<pair<float, Point>> findEdgeBubbles(Mat img,vector<pair<float,Point>>& ha
 							}
 							
 							annResult = ann->predict(testSample);
-							for (int k = 0; k < haarDetectedCenters.size(); k++) //filtering out circles which are already detected
-							{
-								if (haarDetectedCenters[k].second.x<= circleCenter.x*1.05 && circleCenter.x*0.95<= haarDetectedCenters[k].second.x
-									&& haarDetectedCenters[k].second.y <= circleCenter.y*1.05 && circleCenter.y*0.95 <= haarDetectedCenters[k].second.y)
-								{
-									//haarDetectedCenters[k] = make_pair(-1, Point(-1, -1));
-								}
-							}
+
 							if (annResult == 0)
 							{
 								circles.push_back(make_pair(circleRadius, circleCenter));
