@@ -1,20 +1,18 @@
 <style type ="text/css">
 
     .field__label{
-		display: none;
+		display:none;
 	}
 	
 	.slide{
-		display: none;
+		display: none
 		padding - top: 10 px;
 		border-radius: 15px;
 	}
 	
 	.image{
 		padding - top: 100 px;
-		border-radius: 15px; 
-		width: 100%;
-		height: 80%;
+		border-radius: 15px 
 		
 	}
 	
@@ -29,7 +27,6 @@
 	}
 	
 	.prev, .next{
-		
 		position: absolute;
 		top: 400px;
 		color: #f4473a;
@@ -57,10 +54,9 @@
 
 </div>
 
-<div id="arrow">
-	<a class="prev"  onclick="next(-1)">&lt;</a>
-	<a class="next"  onclick="next(+1)">&gt;</a>
-</div>
+
+	<a class="prev" onclick="next(-1)">&lt;</a>
+	<a class="next" onclick="next(+1)">&gt;</a>
 </body>
 
 <?php
@@ -95,20 +91,21 @@
 	
 	
 	echo"<script >
-	
+
+  
+
   var index = 1;
   
   upload();
   showImage(index);
-  
-	
+
 function next(n){
 	index = index + n ;
 	showImage(index); 
 }
 
 function upload(){
-	var divAvg = document.createElement('DIV');
+    var divAvg = document.createElement('DIV');
 	divAvg.setAttribute('class', 'average');
 	var PAvg =document.createElement('P');
 		var br = document.createElement('br');
@@ -143,20 +140,16 @@ function upload(){
 		var br = document.createElement('br');
 		var jolie = 'Time : '.concat(".$infos[count($images)][11].");
 		var jolie2 = jolie.concat(' sec');
-		var textAvg6 = document.createTextNode(jolie);
+		var textAvg6 = document.createTextNode(jolie2);
 	PAvg.appendChild(textAvg6);
 	divAvg.appendChild(PAvg);
 	document.getElementById('container').appendChild(divAvg);
 	
-	
 	";
-	
 	
 	for ($i=0; $i<count($images);$i++){
 		
 	echo"
-		
-	
 	    var divP".$i." =document.createElement('DIV');
 		divP".$i.".setAttribute('class', 'text');
 		var P".$i." =document.createElement('P');
@@ -193,14 +186,11 @@ function upload(){
 		image".$i.".setAttribute('class', 'image');
 		var slide".$i." = document.createElement('DIV');
 		slide".$i.".setAttribute('class','slide');
-		slide".$i.".appendChild(divAvg".$i.");
 		slide".$i.".appendChild(image".$i.");
-		slide".$i.".appendChild(divP".$i.");		
+		slide".$i.".appendChild(divP".$i.");
 		document.getElementById('container').appendChild(slide".$i.");
 		
-		
 	";}
-	
 	
 	if(count($images)==0){
 		
@@ -215,8 +205,6 @@ function upload(){
 		
 		";
 	}
-  
-
 	
 	echo "
 		
