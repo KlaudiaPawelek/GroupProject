@@ -469,7 +469,7 @@ int main(int argc, const char **argv) {
 				}
 
 			}
-			Mat NN = img;
+			Mat NN = img.clone();
 			
 			edgeBubbles = findEdgeBubbles(NN, bubbles);
 
