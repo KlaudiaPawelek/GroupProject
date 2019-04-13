@@ -3,4 +3,5 @@
 # Blacklist all directories
 */
 # Whitelist the file you're interested in. 
-!*.cpp
+!*.cpp 
+!*.php
