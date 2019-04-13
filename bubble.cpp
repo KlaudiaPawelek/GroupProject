@@ -55,6 +55,22 @@ Mat removeLeftBorder(Mat input)
 	}
 	return tmp;
 }
+
+Mat removeLeftBorderColorImage(Mat input)
+{
+	Mat tmp = Mat(input.size().height, input.size().width - 2, input.type());
+	for (int i = 0; i < input.rows; i++)
+	{
+		for (int j = 2; j < input.cols; j++)
+		{
+			tmp.at<Vec3b>(i, j - 2)[0] = input.at<Vec3b>(i, j)[0];
+			tmp.at<Vec3b>(i, j - 2)[1] = input.at<Vec3b>(i, j)[1];
+			tmp.at<Vec3b>(i, j - 2)[2] = input.at<Vec3b>(i, j)[2];
+		}
+	}
+	return tmp;
+}
+
 Mat ExtendRect(Rect& r, Mat sourceImage,double extendFactor)
 {
 	Point tl = r.tl(); //top left corner Point
@@ -112,7 +128,7 @@ vector<pair<float, Point>> findEdgeBubbles(Mat img,vector<pair<float,Point>>& ha
 	float annResult=0;
 	int noOfFeatures = 3603;
 	Mat testSample = Mat(1, noOfFeatures, CV_32FC1, Scalar(0));
-	Mat lbrImg = removeLeftBorder(img);
+	Mat lbrImg = img;
 
 	Point2f circleCenter;
 	float circleRadius;
@@ -361,16 +377,16 @@ int main(int argc, const char **argv) {
 		Mat imgLC;
 
 		if (imagesAfterLC.size())
-			imgLC = removeLeftBorder(imagesAfterLC[k - 4]);
+			imgLC = imagesAfterLC[k - 4];
 
-		img = removeLeftBorder(images[k-4]);    // loading the image in grayscale (classifier was trained on greyscale images)
-		img1 = imread(argv[k], 1);   // loading the same image in RGB (for user operations)
+		img = (images[k-4]);    // loading the image in grayscale (classifier was trained on greyscale images)
+		img1 = removeLeftBorderColorImage(imread(argv[k], 1));   // loading the same image in RGB (for user operations)
 
 		Mat imgLCr2p;
 		Mat imgr2p = r2pTransform(img);
 
 		if(imagesAfterLC.size())
-			imgLCr2p = removeLeftBorder(r2pTransform(imgLC));
+			imgr2p = r2pTransform(imgLC);
 
 
 		if (img.empty())
@@ -391,14 +407,9 @@ int main(int argc, const char **argv) {
 			// vector "drops" stores information about rectangles coordinates
 			cascade.detectMultiScale(img, drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
 
-			if (imagesAfterLC.size())
-			cascade.detectMultiScale(imgLCr2p, dropsLC, 1.05, 3, 0, Size(5, 5), Size(570, 570));
-
 			temp = k - 4;// number of image
 
 						 // converting variable "temp" into string type
-
-
 
 			std::ostringstream sss;
 			sss << temp;
@@ -430,9 +441,11 @@ int main(int argc, const char **argv) {
 				int cIt = 0;
 				double newRadius = 0;
 				double newRadiusAvg = 0;
-				int maxRadiusIndx = 0;
 				Point newCenter=Point(0,0);
 
+				//Getting better accuracy of detection using HoughTransform.
+				//Software iterates through all circles detected using HoughCircles and averages center and radius.
+				//if Haar detects circle on image with lens cleaned then radius is taken from this detection.
 				if (circlesDetected.size() && circlesDetected[cIt][1]!=0 && circlesDetected[cIt][1]!=0 && circlesDetected[cIt][2]!=0)
 				{
 					for (cIt; cIt < circlesDetected.size(); cIt++) //if Hough transform found new circles we sum center and radiuses to calculate average
@@ -445,18 +458,7 @@ int main(int argc, const char **argv) {
 					newCenter.x /= circlesDetected.size();
 					newCenter.y /= circlesDetected.size();
 					newRadiusAvg /= circlesDetected.size();
-					radius = newRadiusAvg;
-					for (int m = 0; m < dropsLC.size(); m++) 
-					{
-						// calculating the center of droplet
-						Point center(dropsLC[m].x + dropsLC[m].width*0.5, dropsLC[m].y + dropsLC[m].height*0.5 + 3);
-						if (center.x > 0.9*(newCenter.x + (r.tl().x)) && center.x < 1.1*(newCenter.x + (r.tl().x)) && center.y>0.9*(newCenter.y + (r.tl().y)) && center.y < 1.1*(newCenter.y + (r.tl().y)))
-						{
-							radius= cvRound(abs(dropsLC[m].width*0.5));
-							break;
-						}
-					}
-					bubbles.push_back(make_pair( radius, Point(newCenter.x + (r.tl().x), newCenter.y + (r.tl().y))));
+					bubbles.push_back(make_pair(newRadiusAvg, Point(newCenter.x + (r.tl().x), newCenter.y + (r.tl().y))));
 
 				}
 				else
@@ -464,19 +466,10 @@ int main(int argc, const char **argv) {
 					bubbles.push_back(make_pair(radius, center));
 					centers.push_back(center);
 					radiuses.push_back(radius);
-					//circle(img1, center, radius, Scalar(58, 71, 244),2);
 				}
 
 			}
-			Mat NN;
-			if (!imgLC.empty())
-			{
-				NN = imgLC;
-			}
-			else
-			{
-				NN = img;
-			}
+			Mat NN = img;
 			
 			edgeBubbles = findEdgeBubbles(NN, bubbles);
 
@@ -526,14 +519,20 @@ int main(int argc, const char **argv) {
 				bubblesTmp.clear();
 				b = make_pair(0, Point(0, 0));
 			}
+			
 			for (int a = 0; a < bubblesFiltered.size(); a++)
 			{
-				circle(img1, bubblesFiltered[a].second, bubblesFiltered[a].first, Scalar(58, 71, 244), 2);
+				circle(img1, edgeBubbles[a].second, edgeBubbles[a].first, Scalar(58, 71, 244), 2);
 			}
 			
 			imwrite(tempPath, img1,saveParams);
-			
-			
+
+			//imshow("Circles", img1);
+			//key = waitKey();
+			//while (key == 'e')
+			//{
+			//	waitKey();
+			//}
 			// Saving information from current image in files. Mean diameter, min, max and SMD
 			
 			file << "Nb : " << bubblesFiltered.size() << endl;
@@ -612,7 +611,7 @@ int main(int argc, const char **argv) {
 	file << "MeanAll : " << (meanAll / diameters_in_mikrometers.size()) << endl;
 	file << "MinAll : " << minAll << endl;
 	file << "MaxAll : " << maxAll << endl;
-	file << "Time : " << chrono::duration_cast<chrono::seconds>(end - start).count()<<" sec"<<endl;
+	file << "Time : " << chrono::duration_cast<chrono::seconds>(end - start).count()<<endl;
 	file.close();
 	images.clear();
 	imagesAfterLC.clear();
