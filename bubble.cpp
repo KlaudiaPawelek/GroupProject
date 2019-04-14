@@ -158,7 +158,7 @@ vector<pair<float, Point>> findEdgeBubbles(Mat img,vector<pair<float,Point>>& ha
 		{
 			approxPolyDP(contours[i], polygonContour, 1, true);
 			minEnclosingCircle(polygonContour, circleCenter, circleRadius);
-			if (circleCenter.x - 2 * circleRadius <= 0 || circleCenter.x + 2 * circleRadius >= imgr2p.cols || circleCenter.y - 2 * circleRadius <= 0 || circleCenter.y + 2 * circleRadius >= imgr2p.rows)
+			if (circleCenter.x -  circleRadius < 0 || circleCenter.x +  circleRadius >= (imgr2p.cols +2)|| circleCenter.y -  circleRadius < 0 || circleCenter.y +  circleRadius >= imgr2p.rows)
 			{
 				if (circleCenter.x >= 0 && circleCenter.y >= 0)
 				{
@@ -326,7 +326,6 @@ int main(int argc, const char **argv) {
 	vector<int> saveParams;
 	saveParams.push_back(IMWRITE_PNG_COMPRESSION);
 	saveParams.push_back(9);
-	//remove("outputFile.txt");
 	calibration_factor = atof(argv[1]);  // calibration factor defined by user
 	name_of_classifier = argv[3];        // name of classifier that should be used (for example Haar5.xml)
 	number_of_drops = 0;                 // counter of droplets on all images
@@ -405,7 +404,7 @@ int main(int argc, const char **argv) {
 
 			// Function to detect droplets using Cascade Classifier; detected droplets are returned as a list of rectangles
 			// vector "drops" stores information about rectangles coordinates
-			cascade.detectMultiScale(img, drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
+			cascade.detectMultiScale(imread(argv[k],IMREAD_GRAYSCALE), drops, 1.05, 3, 0, Size(5, 5), Size(570, 570));
 
 			temp = k - 4;// number of image
 
@@ -430,19 +429,19 @@ int main(int argc, const char **argv) {
 				// calculating the center of droplet
 				Point center(drops[i].x + drops[i].width*0.5, drops[i].y + drops[i].height*0.5 + 3);
 				// calculating radius of droplets
-				int radius = cvRound(abs(drops[i].width*0.5));
+				int radius = (abs(drops[i].width*0.5));
 				int diameter = 2 * radius;
 
 				Mat circlePart = ExtendRect(r, imgr2p,0.15);
-
+				
 				vector<Vec3f> circlesDetected;
 				HoughCircles(circlePart, circlesDetected, HOUGH_GRADIENT, 1, 1, 180, 80, radius*0.8, radius*1.2);
-
+				
 				int cIt = 0;
 				double newRadius = 0;
 				double newRadiusAvg = 0;
 				Point newCenter=Point(0,0);
-
+				
 				//Getting better accuracy of detection using HoughTransform.
 				//Software iterates through all circles detected using HoughCircles and averages center and radius.
 				//if Haar detects circle on image with lens cleaned then radius is taken from this detection.
@@ -453,13 +452,13 @@ int main(int argc, const char **argv) {
 						newCenter.x += circlesDetected[cIt][0];
 						newCenter.y += circlesDetected[cIt][1];
 						newRadiusAvg += circlesDetected[cIt][2];
-
+				
 					}
 					newCenter.x /= circlesDetected.size();
 					newCenter.y /= circlesDetected.size();
 					newRadiusAvg /= circlesDetected.size();
 					bubbles.push_back(make_pair(newRadiusAvg, Point(newCenter.x + (r.tl().x), newCenter.y + (r.tl().y))));
-
+				
 				}
 				else
 				{
@@ -472,13 +471,16 @@ int main(int argc, const char **argv) {
 			Mat NN = img.clone();
 			
 			edgeBubbles = findEdgeBubbles(NN, bubbles);
-
+			
 			vector<pair<float, Point>> bubblesFiltered;
 			for (int g = 0; g < edgeBubbles.size(); g++)
 			{
 				bubbles.push_back(edgeBubbles[g]);
 			}
 			edgeBubbles = bubbles;
+			sort(edgeBubbles.begin(), edgeBubbles.end(), [](auto &left, auto &right) {
+				return left.first > right.first;
+			});
 			vector<pair<float, Point>> edgeBubblesFiltered;
 			vector<pair<float, Point>> bubblesTmp;
 			pair<float,Point> b(0,Point(0,0));
@@ -489,50 +491,55 @@ int main(int argc, const char **argv) {
 				int mIndx = 0;
 				for (int m=0; m < edgeBubbles.size(); m++)
 				{
-					float dRatio = euclideanDist(edgeBubbles[i].second, edgeBubbles[m].second) / (edgeBubbles[i].first + edgeBubbles[m].first);
-					if(m !=i && dRatio<=0.8)
+					if (edgeBubbles[m].first != -1 && edgeBubbles[m].second != Point(-1, -1))
 					{
-						bubblesTmp.push_back(edgeBubbles[m]);
+						float dRatio = euclideanDist(edgeBubbles[i].second, edgeBubbles[m].second) / (edgeBubbles[i].first + edgeBubbles[m].first);
+						float rRatio = edgeBubbles[i].first / edgeBubbles[m].first;
+						if (m != i && dRatio <= 0.8 &&rRatio >= 0.95 && rRatio <=1.05)
+						{
+							bubblesTmp.push_back(edgeBubbles[m]);
+						}
+						else if (m != i && dRatio <= 0.8 && (rRatio < 0.95 || rRatio >1.05))
+						{
+							edgeBubbles[m] = make_pair(-1, Point(-1, -1));
+						}
 					}
 				}
 				if (!bubblesTmp.size())
 				{
 					bubblesTmp.push_back(edgeBubbles[i]);
+					b = edgeBubbles[i];
 				}
 				else
 				{
 					maxR = edgeBubbles[i].first;
+					Point newCenter = Point(0, 0);
+					float newRadius = 0;
+					bubblesTmp.push_back(edgeBubbles[i]);
 					for (int l = 0; l < bubblesTmp.size(); l++)
 					{
-						if (bubblesTmp[l].first > maxR)
-						{
-							maxR = bubblesTmp[l].first;
-							mIndx = l;
-						}
+						newCenter.x += bubblesTmp[l].second.x;
+						newCenter.y += bubblesTmp[l].second.y;
+						newRadius += bubblesTmp[l].first;
 					}
+					b = make_pair(newRadius/ bubblesTmp.size(), Point(newCenter.x/ bubblesTmp.size(), newCenter.y / bubblesTmp.size()));
 				}
-				if (maxR != edgeBubbles[i].first&&  find(edgeBubblesFiltered.begin(), edgeBubblesFiltered.end(), (bubblesTmp[mIndx])) == edgeBubblesFiltered.end())
+				if(find(edgeBubblesFiltered.begin(), edgeBubblesFiltered.end(), b) == edgeBubblesFiltered.end() && b.first != -1 && b.second != Point(-1,-1))
 				{
-					edgeBubblesFiltered.push_back(bubblesTmp[mIndx]);
-					bubblesFiltered.push_back(bubblesTmp[mIndx]);
+					edgeBubblesFiltered.push_back(b);
+					bubblesFiltered.push_back(b);
 				}
 				bubblesTmp.clear();
 				b = make_pair(0, Point(0, 0));
 			}
-			
+
 			for (int a = 0; a < bubblesFiltered.size(); a++)
 			{
-				circle(img1, edgeBubbles[a].second, edgeBubbles[a].first, Scalar(58, 71, 244), 2);
+				circle(img1, bubblesFiltered[a].second, bubblesFiltered[a].first, Scalar(58, 71, 244), 2);
 			}
 			
 			imwrite(tempPath, img1,saveParams);
 
-			//imshow("Circles", img1);
-			//key = waitKey();
-			//while (key == 'e')
-			//{
-			//	waitKey();
-			//}
 			// Saving information from current image in files. Mean diameter, min, max and SMD
 			
 			file << "Nb : " << bubblesFiltered.size() << endl;
@@ -604,8 +611,6 @@ int main(int argc, const char **argv) {
 	SMD = d3 / d2;
 	auto end = chrono::system_clock::now();
 
-	// Sauter Mean Diameter in file : "diametersInMikroMeters.txt"
-	
 	file << endl<< "NbAll : " << number_of_drops << endl;
 	file << "SMDAll : " << SMD << endl;
 	file << "MeanAll : " << (meanAll / diameters_in_mikrometers.size()) << endl;
