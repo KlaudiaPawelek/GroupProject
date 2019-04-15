@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+#myProgress {
+  display: none;
+  width: 30%;
+  height: 25px;
+  background-color: #f2f2f2;
+  border-radius: 5px;
+}
+
+#myBar {
+  display: none;
+  width: 0%;
+  height: 25px;
+  text-align: center;
+  line-height: 30px;
+  color: white;
+  border-radius: 5px;
+  background-color: #fc681e;
+}
+#compile
+{
+background-color: #fc681e;
+}
+/* Center the loader */
+#loader {
+display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 100px;
+  height: 100px;
+  margin: 0px 0 0 -55px;
+}
+
+#information
+{
+  display: none;
+  position: absolute;
+  margin: 80px 0 0 5px;
+}
+
+#myDiv 
+{
+  //display: inline-block;
+  //text-align: center;
+}
+</style>
+</head>
+<body>
+<div id="loader"><img alt="loader" src="Preloader_7.gif" /></div>
+
+<div id="information">
+<p>Please, wait. Program is detecting droplets...</p>
+</div>
+
+<div class="animate-bottom" id="myDiv">
+<form action="upload.php" enctype="multipart/form-data" method="POST">
+<table border="0">
+	<tbody border="0">
+		<tr>
+			<td><b>Submit images</b></td>
+			<td><input class="multi" multiple="multiple" name="files[]" type="file" /></td>
+		</tr>
+		<tr>
+			<td><a href="/drupal/samples">See your samples</a></td>
+			<td><input name="upload" onclick="move()" type="submit" value="Upload" /> &nbsp; <input type="reset" />
+			<div id="myProgress">
+			<div id="myBar">&nbsp;</div>
+			</div>
+			</td>
+		</tr>
+	</tbody>
+</table>
+</form>
+
+<form action="runScript.php" method="POST" nctype="multipart/form-data">
+<input class="compile" id="compile" name="compile" onclick="MyFunction()" type="submit" value="Compile" />&nbsp;</form>
+</div>
+<script>
+var myVar;
+
+function MyFunction() {
+  myVar = setTimeout(showPage, 500);
+}
+
+function showPage() {
+  document.getElementById("loader").style.display = "block";
+  document.getElementById("myDiv").style.display = "none";
+  document.getElementById("information").style.display = "inline-block";
+}
+</script><script>
+function move() {
+  
+ document.getElementById("myBar").style.display = "block";
+ document.getElementById("myProgress").style.display = "block";
+ var elem = document.getElementById("myBar");   
+  var width = 10;
+  var id = setInterval(frame, 10);
+  function frame() {
+    if (width >= 100) {
+      clearInterval(id);
+    } else {
+      width++; 
+      elem.style.width = width + '%'; 
+      elem.innerHTML = width * 1  + '%';
+    }
+  }
+}
+</script>
+</body>
+</html>

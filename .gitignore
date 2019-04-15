@@ -6,3 +6,5 @@
 !*.cpp
 !*.h
 !*.cs
+!*.html
+!*.php
