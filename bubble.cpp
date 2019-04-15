@@ -42,6 +42,14 @@ int temp;
 
 double d2, d3, SMD;              // to calculate Sauter mean diameter
 
+
+struct sort_pairsVector 
+{
+	bool operator()(const std::pair<float, Point> &left, const std::pair<float, Point> &right) {
+		return left.first > right.first;
+	}
+};
+
 //two first columns contain dark pixels so we remove those columns as it interrupts contours detection
 Mat removeLeftBorder(Mat input)
 {
@@ -478,7 +486,7 @@ int main(int argc, const char **argv) {
 				bubbles.push_back(edgeBubbles[g]);
 			}
 			edgeBubbles = bubbles;
-			sort(edgeBubbles.begin(), edgeBubbles.end(), [](auto &left, auto &right) {
+			sort(edgeBubbles.begin(), edgeBubbles.end(), [](pair<float,Point> &left, pair<float, Point> &right) {
 				return left.first > right.first;
 			});
 			vector<pair<float, Point>> edgeBubblesFiltered;
