@@ -2,6 +2,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
+#include <algorithm>
 #include <fstream>
 #include <chrono>
 
@@ -486,9 +487,7 @@ int main(int argc, const char **argv) {
 				bubbles.push_back(edgeBubbles[g]);
 			}
 			edgeBubbles = bubbles;
-			sort(edgeBubbles.begin(), edgeBubbles.end(), [](pair<float,Point> &left, pair<float, Point> &right) {
-				return left.first > right.first;
-			});
+			sort(edgeBubbles.begin(), edgeBubbles.end(), sort_pairsVector());
 			vector<pair<float, Point>> edgeBubblesFiltered;
 			vector<pair<float, Point>> bubblesTmp;
 			pair<float,Point> b(0,Point(0,0));
