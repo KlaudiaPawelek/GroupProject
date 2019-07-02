@@ -22,4 +22,4 @@ The aim of the project is to apply knowledge, from Software Engineering or Compu
  * Damien Lida
  * Ahamed Alayda
 
-
+## If you would like to use this code, please let me know klaudia.pawelek@cranfield.ac.uk and put information in your research!
